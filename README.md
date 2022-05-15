@@ -13,5 +13,5 @@ Beam-Warming
 
 TVD
 
-ENO-RK3
+WENO-RK3
 
