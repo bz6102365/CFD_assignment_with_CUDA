@@ -9,8 +9,8 @@
 #include <iostream>
 
 __global__ void dev_FVS(float* dev_points, float* dev_positive_ret, float* dev_negative_ret,float a) {
-	dev_positive_ret[threadIdx.x] = 0.5 * a * (abs(dev_points[threadIdx.x]) + dev_points[threadIdx.x]);
-	dev_negative_ret[threadIdx.x] = 0.5 * a * (-abs(dev_points[threadIdx.x]) + dev_points[threadIdx.x]);
+	dev_positive_ret[threadIdx.x] = a * dev_points[threadIdx.x];
+	dev_negative_ret[threadIdx.x] = 0;
 }
 
 __global__ void dev_calc_f_plus_half_plus(float* dev_f_plus, float* dev_ret) {
@@ -18,22 +18,26 @@ __global__ void dev_calc_f_plus_half_plus(float* dev_f_plus, float* dev_ret) {
 	float q1 = -1.0 / 6.0 * dev_f_plus[threadIdx.x + 1] + 5.0 / 6.0 * dev_f_plus[threadIdx.x + 2] + 1.0 / 3.0 * dev_f_plus[threadIdx.x + 3];
 	float q2 = 1.0 / 3.0 * dev_f_plus[threadIdx.x + 2] + 5.0 / 6.0 * dev_f_plus[threadIdx.x + 3] - 1.0 / 6.0 * dev_f_plus[threadIdx.x + 4];
 
-	float is0 = 13.0 / 12.0 * (dev_f_plus[threadIdx.x] - 2.0 * dev_f_plus[threadIdx.x + 1] + dev_f_plus[threadIdx.x + 2]) * \
-		(dev_f_plus[threadIdx.x] - 2 * dev_f_plus[threadIdx.x + 1] + dev_f_plus[threadIdx.x + 2])\
-		+ 1.0 / 4.0 * (dev_f_plus[threadIdx.x] - 4.0 * dev_f_plus[threadIdx.x + 1] + 3.0 * dev_f_plus[threadIdx.x + 2])\
-		* (dev_f_plus[threadIdx.x] - 4.0 * dev_f_plus[threadIdx.x + 1] + 3.0 * dev_f_plus[threadIdx.x + 2]);
+	float is0 = 13.0 / 12.0 * pow((dev_f_plus[threadIdx.x] - 2.0 * dev_f_plus[threadIdx.x + 1] + dev_f_plus[threadIdx.x + 2]), 2) + 1.0 / 4.0 * pow((dev_f_plus[threadIdx.x] - 4.0 * dev_f_plus[threadIdx.x + 1] + 3.0 * dev_f_plus[threadIdx.x + 2]), 2);
 
-	float is1 = 13.0 / 12.0 * (dev_f_plus[threadIdx.x + 1] - 2.0 * dev_f_plus[threadIdx.x + 2] + dev_f_plus[threadIdx.x + 3]) * \
-		(dev_f_plus[threadIdx.x + 1] - 2 * dev_f_plus[threadIdx.x + 2] + dev_f_plus[threadIdx.x + 3])\
-		+ 1.0 / 4.0 * (dev_f_plus[threadIdx.x + 1] - dev_f_plus[threadIdx.x + 3])\
-		* (dev_f_plus[threadIdx.x + 1] - dev_f_plus[threadIdx.x + 3]);
+	float is1 = 13.0 / 12.0 * pow((dev_f_plus[threadIdx.x + 1] - 2.0 * dev_f_plus[threadIdx.x + 2] + dev_f_plus[threadIdx.x + 3]), 2) + 1.0 / 4.0 * pow((dev_f_plus[threadIdx.x + 1] - dev_f_plus[threadIdx.x + 3]), 2);
 
-	float is2 = 13.0 / 12.0 * (dev_f_plus[threadIdx.x + 2] - 2.0 * dev_f_plus[threadIdx.x + 3] + dev_f_plus[threadIdx.x + 4]) * \
-		(dev_f_plus[threadIdx.x + 2] - 2.0 * dev_f_plus[threadIdx.x + 3] + dev_f_plus[threadIdx.x + 4])\
-		+ 1.0 / 4.0 * (3.0 * dev_f_plus[threadIdx.x + 2] - 4.0 * dev_f_plus[threadIdx.x + 3] + 1.0 * dev_f_plus[threadIdx.x + 4])\
-		* (3.0 * dev_f_plus[threadIdx.x + 2] - 4.0 * dev_f_plus[threadIdx.x + 3] + 1.0 * dev_f_plus[threadIdx.x + 4]);
+	float is2 = 13.0 / 12.0 * pow((dev_f_plus[threadIdx.x + 2] - 2.0 * dev_f_plus[threadIdx.x + 3] + dev_f_plus[threadIdx.x + 4]), 2) + 1.0 / 4.0 * pow((3.0 * dev_f_plus[threadIdx.x + 2] - 4.0 * dev_f_plus[threadIdx.x + 3] + 1.0 * dev_f_plus[threadIdx.x + 4]), 2);
+	//dev_ret[threadIdx.x + 2] = minmod63(q0, q1, q2, is0, is1, is2);
+	//dev_ret[threadIdx.x + 2] = q0;
+	float c0 = pow(1.0 / 10.0,1);
+	float c1 = pow(3.0 / 5.0,1);
+	float c2 = pow(3.0 / 10.0,1);
+	float a0 = c0 / ((is0 * is0) + 1e-9);
+	float a1 = c1 / ((is1 * is1) + 1e-9);
+	float a2 = c2 / ((is2 * is2) + 1e-9);
 
-	dev_ret[threadIdx.x + 2] = minmod63(q0, q1, q2, is0, is1, is2);
+	float w0 = a0 / (a0 + a1 + a2);
+	float w1 = a1 / (a0 + a1 + a2);
+	float w2 = a2 / (a0 + a1 + a2);
+
+	dev_ret[threadIdx.x + 2] = w0 * q0 + w1 * q1 + w2 * q2;
+	//dev_ret[threadIdx.x + 2] = (q0 + q1 + q2) / 3.0;
 }
 
 __global__ void dev_calc_f_plus_half_minus(float* dev_f_plus, float* dev_ret) {
@@ -41,22 +45,32 @@ __global__ void dev_calc_f_plus_half_minus(float* dev_f_plus, float* dev_ret) {
 	float q1 = 1.0 / 3.0 * dev_f_plus[threadIdx.x + 1] + 5.0 / 6.0 * dev_f_plus[threadIdx.x + 2] - 1.0 / 6.0 * dev_f_plus[threadIdx.x + 3];
 	float q2 = 11.0 / 6.0 * dev_f_plus[threadIdx.x + 2] - 7.0 / 6.0 * dev_f_plus[threadIdx.x + 3] + 1.0 / 3.0 * dev_f_plus[threadIdx.x + 4];
 
-	float is0 = 13.0 / 12.0 * (dev_f_plus[threadIdx.x] - 2.0 * dev_f_plus[threadIdx.x + 1] + dev_f_plus[threadIdx.x + 2]) * \
-		(dev_f_plus[threadIdx.x] - 2 * dev_f_plus[threadIdx.x + 1] + dev_f_plus[threadIdx.x + 2])\
-		+ 1.0 / 4.0 * (dev_f_plus[threadIdx.x] - 4.0 * dev_f_plus[threadIdx.x + 1] + 3.0 * dev_f_plus[threadIdx.x + 2])\
-		* (dev_f_plus[threadIdx.x] - 4.0 * dev_f_plus[threadIdx.x + 1] + 3.0 * dev_f_plus[threadIdx.x + 2]);
+	float is0 = 13.0 / 12.0 * pow((dev_f_plus[threadIdx.x] - 2.0 * dev_f_plus[threadIdx.x + 1] + dev_f_plus[threadIdx.x + 2]),2)+ 1.0 / 4.0 * pow((dev_f_plus[threadIdx.x] - 4.0 * dev_f_plus[threadIdx.x + 1] + 3.0 * dev_f_plus[threadIdx.x + 2]),2);
 
-	float is1 = 13.0 / 12.0 * (dev_f_plus[threadIdx.x + 1] - 2.0 * dev_f_plus[threadIdx.x + 2] + dev_f_plus[threadIdx.x + 3]) * \
-		(dev_f_plus[threadIdx.x + 1] - 2 * dev_f_plus[threadIdx.x + 2] + dev_f_plus[threadIdx.x + 3])\
-		+ 1.0 / 4.0 * (dev_f_plus[threadIdx.x + 1] - dev_f_plus[threadIdx.x + 3])\
-		* (dev_f_plus[threadIdx.x + 1] - dev_f_plus[threadIdx.x + 3]);
+	float is1 = 13.0 / 12.0 * pow((dev_f_plus[threadIdx.x + 1] - 2.0 * dev_f_plus[threadIdx.x + 2] + dev_f_plus[threadIdx.x + 3]), 2) + 1.0 / 4.0 * pow((dev_f_plus[threadIdx.x + 1] - dev_f_plus[threadIdx.x + 3]), 2);
 
-	float is2 = 13.0 / 12.0 * (dev_f_plus[threadIdx.x + 2] - 2.0 * dev_f_plus[threadIdx.x + 3] + dev_f_plus[threadIdx.x + 4]) * \
-		(dev_f_plus[threadIdx.x + 2] - 2.0 * dev_f_plus[threadIdx.x + 3] + dev_f_plus[threadIdx.x + 4])\
-		+ 1.0 / 4.0 * (3.0 * dev_f_plus[threadIdx.x + 2] - 4.0 * dev_f_plus[threadIdx.x + 3] + 1.0 * dev_f_plus[threadIdx.x + 4])\
-		* (3.0 * dev_f_plus[threadIdx.x + 2] - 4.0 * dev_f_plus[threadIdx.x + 3] + 1.0 * dev_f_plus[threadIdx.x + 4]);
+	float is2 = 13.0 / 12.0 * pow((dev_f_plus[threadIdx.x + 2] - 2.0 * dev_f_plus[threadIdx.x + 3] + dev_f_plus[threadIdx.x + 4]), 2) + 1.0 / 4.0 * pow((3.0 * dev_f_plus[threadIdx.x + 2] - 4.0 * dev_f_plus[threadIdx.x + 3] + 1.0 * dev_f_plus[threadIdx.x + 4]), 2);
 
-	dev_ret[threadIdx.x + 1] = minmod63(q0, q1, q2, is0, is1, is2);
+	//dev_ret[threadIdx.x + 1] = minmod63(q0, q1, q2, is0, is1, is2);
+	//dev_ret[threadIdx.x + 1] = q0;
+
+	float c0 = pow(3.0 / 10.0, 1);
+	float c1 = pow(3.0 / 5.0,1);
+	float c2 = pow(1.0 / 10.0,1);
+	float a0 = c0 / ((is0 * is0) + 1e-9);
+	float a1 = c1 / ((is1 * is1) + 1e-9);
+	float a2 = c2 / ((is2 * is2) + 1e-9);
+
+	float w0 = a0 / (a0 + a1 + a2);
+	float w1 = a1 / (a0 + a1 + a2);
+	float w2 = a2 / (a0 + a1 + a2);
+
+
+	dev_ret[threadIdx.x + 1] = w0 * q0 + w1 * q1 + w2 * q2;
+	//if (is0 >= 0.001 || is0 >= 0.001 || is0 >= 0.001)
+	//	printf("%.4f %.4f %.4f\n", w0, w1, w2);
+	//	printf("%.4f \n", dev_ret[threadIdx.x + 1]);
+	//dev_ret[threadIdx.x + 1] = q0;
 }
 
 __global__ void dev_f_reduce(float* dev_f_plus, float* dev_f_minus, float* dev_ret) {
@@ -87,49 +101,6 @@ __global__ void dev_rk3_reduce(float* dev_points, float* dev_ret, float* dev_dif
 }
 
 
-void step_without_rk(IN float* dev_points, OUT float* dev_ret, float dt, float nums, float a) 
-{
-	float* dev_f_plus = 0;
-	float* dev_f_minus = 0;
-	cudaMalloc((void**)&dev_f_plus, nums * sizeof(float));
-	cudaMalloc((void**)&dev_f_minus, nums * sizeof(float));
-
-	dev_FVS <<<1, nums >>> (dev_points, dev_f_plus, dev_f_minus, a);
-
-	float* dev_f_plus_half = 0;
-	float* dev_f_minus_half = 0;
-	cudaMalloc((void**)&dev_f_plus_half, nums * sizeof(float));
-	cudaMalloc((void**)&dev_f_minus_half, nums * sizeof(float));
-
-	dev_calc_f_plus_half_plus <<<1, nums - 4 >>> (dev_f_plus, dev_f_plus_half);
-	dev_calc_f_plus_half_plus <<<1, nums - 4 >>> (dev_f_plus, dev_f_plus_half);
-
-	float* dev_f_reduced = 0;
-	cudaMalloc((void**)&dev_f_reduced, nums * sizeof(float));
-
-	dev_f_reduce <<<1, nums >>> (dev_f_plus, dev_f_minus, dev_f_reduced);
-
-	float* dev_diff = 0;
-	cudaMalloc((void**)&dev_diff, nums * sizeof(float));
-
-	dev_non_rk_diff<<<1, nums - 6 >>>(dev_f_reduced, dev_diff, dt, 1.0 / (nums - 1));
-
-	dev_fill_diff <<<1, 1 >>> (dev_points, dev_diff, dt, 1.0 / (nums - 1), nums - 1);
-
-	dev_non_rk_step <<<1, nums >>> (dev_points, dev_diff, dev_ret);
-
-	cudaMemcpy(dev_points, dev_ret, nums * sizeof(float), cudaMemcpyDeviceToDevice);
-
-	cudaFree(dev_f_plus);
-	cudaFree(dev_f_minus);
-	cudaFree(dev_f_plus_half);
-	cudaFree(dev_f_minus_half);
-	cudaFree(dev_f_reduced);
-	cudaFree(dev_diff);
-
-	CHECK_KERNEL();
-}
-
 void single_step_diff(IN float* dev_points, OUT float* dev_ret, float dt, float nums, float a) //k*dt
 {
 	float* dev_f_plus = 0;
@@ -145,12 +116,12 @@ void single_step_diff(IN float* dev_points, OUT float* dev_ret, float dt, float 
 	cudaMalloc((void**)&dev_f_minus_half, nums * sizeof(float));
 
 	dev_calc_f_plus_half_plus <<<1, nums - 4 >>> (dev_f_plus, dev_f_plus_half);
-	dev_calc_f_plus_half_plus <<<1, nums - 4 >>> (dev_f_plus, dev_f_plus_half);
+	dev_calc_f_plus_half_minus <<<1, nums - 4 >>> (dev_f_minus, dev_f_minus_half);
 
-	float* dev_f_reduced = 0;
+	float* dev_f_reduced = dev_f_plus_half;
 	cudaMalloc((void**)&dev_f_reduced, nums * sizeof(float));
 
-	dev_f_reduce <<<1, nums >>> (dev_f_plus, dev_f_minus, dev_f_reduced);
+	dev_f_reduce <<<1, nums >>> (dev_f_plus_half, dev_f_minus_half, dev_f_reduced);
 
 	float* dev_diff = 0;
 	cudaMalloc((void**)&dev_diff, nums * sizeof(float));
@@ -164,7 +135,7 @@ void single_step_diff(IN float* dev_points, OUT float* dev_ret, float dt, float 
 	cudaFree(dev_f_plus);
 	cudaFree(dev_f_minus);
 	cudaFree(dev_f_plus_half);
-	cudaFree(dev_f_minus_half);
+	//cudaFree(dev_f_minus_half);
 	cudaFree(dev_f_reduced);
 	cudaFree(dev_diff);
 
@@ -187,6 +158,7 @@ void single_step_rk3(IN float* dev_points, OUT float* dev_ret, float dt, float n
 	cudaMalloc((void**)&dev_points2, nums * sizeof(float));
 	
 	dev_coeff_step <<<1, nums >>> (dev_points, dev_diff1, dev_points2, 0.5f);
+	
 	//////////////////////////////////////////
 	float* dev_diff2 = 0;
 	cudaMalloc((void**)&dev_diff2, nums * sizeof(float));
@@ -204,9 +176,9 @@ void single_step_rk3(IN float* dev_points, OUT float* dev_ret, float dt, float n
 	single_step_diff(dev_points3, dev_diff3, dt, nums, a);
 
 	dev_rk3_reduce <<<1, nums >>> (dev_points, dev_ret, dev_diff1, dev_diff2, dev_diff3);
-
+	
 	cudaMemcpy(dev_points, dev_ret, nums * sizeof(float), cudaMemcpyDeviceToDevice);
-
+	
 	cudaFree(dev_diff1);
 	cudaFree(dev_diff2);
 	cudaFree(dev_diff3);
